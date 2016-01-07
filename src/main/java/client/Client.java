@@ -13,6 +13,7 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.rmi.RemoteException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.Key;
@@ -28,8 +29,14 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
+import nameserver.INameserver;
+import nameserver.INameserverForChatserver;
+import nameserver.exceptions.AlreadyRegisteredException;
+import nameserver.exceptions.InvalidDomainException;
+
 import org.bouncycastle.util.encoders.Base64;
 
+import objects.Domain;
 import objects.PrivateAdress;
 import cli.Shell;
 import util.Config;
@@ -56,6 +63,9 @@ public class Client implements IClientCli, Runnable {
 	public static final String AESALGORITHM = "AES/CTR/NoPadding";
 	private IvParameterSpec iv = null;
 	private SecretKey secretKey = null;
+	
+	private INameserver nameserver;
+	String username;
 	/**
 	 * @param componentName
 	 *            the name of the component - represented in the prompt
@@ -121,6 +131,7 @@ public class Client implements IClientCli, Runnable {
 	@Override
 	public String login(String username, String password) throws IOException {
 		serverWriter.println("!login "+username+" "+password);
+		this.username = username;
 		return serverReader.readLine();
 		
 	}
@@ -173,9 +184,34 @@ public class Client implements IClientCli, Runnable {
 	@Override
 	public String lookup(String username) throws IOException {
 		serverWriter.println("!lookup "+username);
+		//return response;
 		String response = serverReader.readLine();
-		return response;
+		Domain d = new Domain(username);
+		
+		INameserverForChatserver currentNameserver = nameserver;
+		try{
+			while(currentNameserver != null && d.hasSubDomain()){
+				currentNameserver = currentNameserver.getNameserver(d.getRootDomain());
+				d = d.getSubDomain();
+			}
+			
+			if(currentNameserver == null){
+				System.err.println("Current Nameserver is not reachable.");
+			}else{
+			
+				String pAdress = currentNameserver.lookup(d.toString());
+				if(pAdress == null){
+					System.err.println(username + " not reachable.");
+				}
+				return pAdress;
+			}
+		}catch(RemoteException e){
+			e.printStackTrace();
+		}
+		return null;
 	}
+	
+	
 	@Command
 	@Override
 	public String register(String privateAddress) throws IOException {
@@ -192,17 +228,21 @@ public class Client implements IClientCli, Runnable {
 		pA.setName(ip);
 		pA.setPort(port);
 		
+		try{
+			nameserver.registerUser(username, privateAddress);
+		}catch(RemoteException e ){
+			e.printStackTrace();
+		}catch(AlreadyRegisteredException ex){
+			ex.printStackTrace();
+		}catch(InvalidDomainException i){
+			i.printStackTrace();
+		}
+		
 		new Thread(new PrivateMessageListener(privateServerSocket,data)).start();
 		
-		
-		
-		
-		
 		return "Registration was successful.";
-		
-		
-		
 	}
+	
 	@Command
 	@Override
 	public String lastMsg() throws IOException {
@@ -234,6 +274,7 @@ public class Client implements IClientCli, Runnable {
 	@Command
 	@Override
 	public String authenticate(String username) throws IOException {
+		this.username = username;
 		SecureRandom secureRandom = new SecureRandom();
 		final byte[] clientChallenge = new byte[32];
 		secureRandom.nextBytes(clientChallenge);
