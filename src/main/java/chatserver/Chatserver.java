@@ -95,7 +95,7 @@ public class Chatserver implements IChatserverCli, Runnable {
 				//thread.start();
 				//threads.add(thread);
 				Thread thread;
-				TCPConnection connection = new TCPConnection(serverSocket, data);
+				TCPConnection connection = new TCPConnection(serverSocket, data, config);
 				data.addThread(connection);	
 				thread = new Thread(connection);			
 				thread.start();

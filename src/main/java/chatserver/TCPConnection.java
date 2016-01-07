@@ -3,6 +3,7 @@ package chatserver;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.lang.InterruptedException;
+import java.io.File;
 import java.io.InputStreamReader;
 import java.io.InterruptedIOException;
 import java.io.PrintWriter;
@@ -10,6 +11,24 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.InetSocketAddress;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.Key;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.KeyGenerator;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
+
+import org.bouncycastle.util.encoders.Base64;
+
+import util.Config;
+import util.Keys;
 
 public class TCPConnection implements Runnable{
 
@@ -22,8 +41,16 @@ public class TCPConnection implements Runnable{
 	private InetSocketAddress address;
 	private BufferedReader reader;
 	private PrintWriter writer;
+
+	private Key key;
+	private boolean authenticated;
+	public static final String ALGORITHM = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
+	public static final String AESALGORITHM = "AES/CTR/NoPadding";
+	private IvParameterSpec iv = null;
+	private SecretKey secretKey = null;
+	private Config config;
 	
-	public TCPConnection(ServerSocket serverSocket, ChatserverData data) {
+	public TCPConnection(ServerSocket serverSocket, ChatserverData data, Config config) {
 		this.serverSocket = serverSocket;
 		this.data = data;
 		this.loggedIn = false;
@@ -33,6 +60,14 @@ public class TCPConnection implements Runnable{
 		this.address = null;
 		this.reader = null;
 		this.writer = null;
+		this.config = config;
+		try {
+			File pemFile = new File(config.getString("key"));
+			key = Keys.readPrivatePEM(pemFile);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 	
 	private boolean login(String request){
@@ -128,6 +163,108 @@ public class TCPConnection implements Runnable{
 	public void InterrupsForMessage(){
 	}
 	
+	private String authenticate(String encryptedCmd64, BufferedReader reader,
+			PrintWriter writer) {
+		byte[] encryptedCmd = Base64.decode(encryptedCmd64.getBytes());
+		String cmd = "";
+		Cipher cipher;
+		try {
+			cipher = Cipher.getInstance(ALGORITHM);
+			cipher.init(Cipher.DECRYPT_MODE, key);
+			cmd = new String(Base64.encode(cipher.doFinal(encryptedCmd)));
+		} catch (NoSuchAlgorithmException | NoSuchPaddingException
+				| InvalidKeyException | IllegalBlockSizeException
+				| BadPaddingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		if (cmd.contains("!authenticate")) {
+			String[] splittedCmd = cmd.split(" ");
+			String userName = splittedCmd[1];
+			String clientChallenge64 = splittedCmd[2];
+			SecureRandom secureRandom = new SecureRandom();
+			final byte[] serverChallenge = new byte[32];
+			secureRandom.nextBytes(serverChallenge);
+			String controllerChallenge64 = new String(
+					Base64.encode(serverChallenge));
+
+			KeyGenerator generator;
+			try {
+				generator = KeyGenerator.getInstance("AES");
+				generator.init(256);
+				secretKey = generator.generateKey();
+				String secretKey64 = new String(
+						encryptBase64(secretKey.getEncoded()));
+
+				SecureRandom random = new SecureRandom();
+				byte[] ivBytes = new byte[16];
+				random.nextBytes(ivBytes);
+				iv = new IvParameterSpec(ivBytes);
+				String iv64 = new String(encryptBase64(iv.getIV()));
+				
+				File pemFile = new File(config.getString("keys.dir")+userName);
+				Key publicKey = Keys.readPublicPEM(pemFile);
+
+				cipher = Cipher.getInstance(ALGORITHM);
+				cipher.init(Cipher.ENCRYPT_MODE, publicKey);
+				byte[] msgToSend = ("!ok " + clientChallenge64 + " "
+						+ controllerChallenge64 + " " + secretKey64 + " " + iv64)
+						.getBytes();
+				String controllerResponse64 = new String(Base64.encode(cipher
+						.doFinal(msgToSend)));
+				
+				// send second message: !ok <client-challenge>
+				// <controller-challenge> <secret-key> <iv-parameter>
+				writer.println(controllerResponse64);
+				
+				// receive third message: <controller-challenge>
+				String clientResponse64AES64 = reader.readLine();
+				
+				cipher = Cipher.getInstance(AESALGORITHM);
+				cipher.init(Cipher.DECRYPT_MODE, secretKey, iv);
+				String clientResponse64 = new String(Base64.encode(cipher.doFinal(clientResponse64AES64.getBytes())));
+
+				if (clientResponse64.equals(controllerChallenge64)) {
+					return "success";
+				} else {
+					return "fail";
+				}
+
+			} catch (NoSuchAlgorithmException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (InvalidKeyException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (NoSuchPaddingException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (IllegalBlockSizeException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (BadPaddingException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (InvalidAlgorithmParameterException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		} else {
+			return "no !authenticate command found";
+		}
+		return "fail";
+
+	}
+	
+	private byte[] encryptBase64(byte[] msg) {
+		byte[] base64Msg = Base64.encode(msg);
+
+		return base64Msg;
+	}
+	
 	public void run() {
 		while(true){
 			try{
@@ -151,9 +288,19 @@ public class TCPConnection implements Runnable{
 					if(request!=null){
 						if(!request.startsWith("!")) writer.println("Request has to start with '!'");
 						
-						if(!loggedIn){								//!login
-							if(!login(request)) continue;
+						if (!authenticated) {
+							// receive first message: !authenticate <user>
+							// <client-challenge>
+							String auth = authenticate(request, reader, writer);
+							if (auth.equals("success")) {
+								authenticated = true;
+								continue;
+							}
 						}
+						
+//						if(!loggedIn){								//!login
+//							if(!login(request)) continue;
+//						}
 						if(request.equals("!logout")){				//!logout
 							logout();
 							close();

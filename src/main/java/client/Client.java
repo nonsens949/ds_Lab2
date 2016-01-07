@@ -1,6 +1,7 @@
 package client;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -12,10 +13,27 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.Key;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.util.Arrays;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+
+import org.bouncycastle.util.encoders.Base64;
 
 import objects.PrivateAdress;
 import cli.Shell;
 import util.Config;
+import util.Keys;
 import cli.Command;
 import cli.Shell;
 
@@ -33,6 +51,11 @@ public class Client implements IClientCli, Runnable {
 	DatagramSocket udpsocket;
 	ServerSocket privateServerSocket;
 	ClientData data;
+	
+	public static final String ALGORITHM = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
+	public static final String AESALGORITHM = "AES/CTR/NoPadding";
+	private IvParameterSpec iv = null;
+	private SecretKey secretKey = null;
 	/**
 	 * @param componentName
 	 *            the name of the component - represented in the prompt
@@ -211,8 +234,84 @@ public class Client implements IClientCli, Runnable {
 	@Command
 	@Override
 	public String authenticate(String username) throws IOException {
-		// TODO Auto-generated method stub
-		return null;
+		SecureRandom secureRandom = new SecureRandom();
+		final byte[] clientChallenge = new byte[32];
+		secureRandom.nextBytes(clientChallenge);
+		String clientChallenge64 = new String(Base64.encode(clientChallenge));
+		
+		File pemFile = new File(config.getString("chatserver.key"));
+		Key key = Keys.readPublicPEM(pemFile);
+		String cipheredMsg64 = "";
+		Cipher cipher;
+		try {
+			cipher = Cipher.getInstance(ALGORITHM);
+			cipher.init(Cipher.ENCRYPT_MODE, key);
+			byte[] msgToSend = ("!authenticate " + username + " " + clientChallenge64).getBytes();
+			cipheredMsg64 = new String(Base64.encode(cipher.doFinal(msgToSend)));
+		} catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		// send first message: !authenticate <user> <client-challenge>
+		serverWriter.println(cipheredMsg64);
+		
+		
+		// receive second message: !ok <client-challenge> <controller-challenge>
+				// <secret-key> <iv-parameter>
+				String encryptedControllerResponse64 = serverReader.readLine();
+				byte[] encryptedControllerResponse = Base64.decode(encryptedControllerResponse64.getBytes());
+				
+				pemFile = new File(config.getString("keys.dir")+username);
+				Key privateKey = Keys.readPublicPEM(pemFile);
+				
+				try {
+					cipher = Cipher.getInstance(ALGORITHM);
+				cipher.init(Cipher.DECRYPT_MODE, privateKey);
+				String controllerResponse = new String(Base64.encode(cipher.doFinal(encryptedControllerResponse)));
+
+				if (controllerResponse.contains("!ok")) {
+					String[] splitted = controllerResponse.split(" ");
+					byte[] returnedClientChallenge = Base64.decode(splitted[1].getBytes());
+					
+					if (Arrays.equals(returnedClientChallenge, clientChallenge)) {
+						byte[] secKey = Base64.decode(splitted[3]);
+						secretKey = new SecretKeySpec(secKey, 0, secKey.length, "AES");
+						byte[] ivArr = Base64.decode(splitted[4]);
+						iv = new IvParameterSpec(ivArr);
+						
+						cipher = Cipher.getInstance(AESALGORITHM);
+						cipher.init(Cipher.ENCRYPT_MODE, secretKey, iv);
+						String encryptedMsg64 = new String(Base64.encode(cipher.doFinal(splitted[2].getBytes())));
+						
+//						String encryptedMsg64 = new String(Base64.encode(encryptedMsg.getBytes()));
+						// send third message: <controller-challenge>
+						serverWriter.println(encryptedMsg64);
+					} else {
+						System.out.println("Client challenges don't match!");
+					}
+				}
+				} catch (NoSuchAlgorithmException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (NoSuchPaddingException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (InvalidKeyException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (IllegalBlockSizeException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (BadPaddingException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (InvalidAlgorithmParameterException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+
+				return "Successfully authenticated.";
 	}
 
 }
