@@ -1,0 +1,4 @@
+*	Chatserver	chatserver
+*	Client		alice.vienna.at
+*	Client		bill.de
+

@@ -1,0 +1,19 @@
+*	Chatserver	chatserver
+*	Client		alice.vienna.at
+*	Client		bill.de
+*	Client		honesch.com
+
+bill.de:			!login bill.de 23456
+alice.vienna.at:	!login alice.vienna.at 12345
+honesch.com:		!login honesch.com xlt3j
+
+honesch.com:		!register 10.0.0.8:13107
+bill.de:			!register 10.0.0.8:13108
+
+bill.de:			!msg honesch.com asdasd
+bill.de:			!msg alice.vienna.at asdasdasdaasd
+alice.vienna.at:	!msg bill.de Hello Billchen :) Bussi
+
+
+chatserver: 		!exit
+alice.vienna.at:	!exit

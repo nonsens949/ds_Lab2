@@ -1,0 +1,45 @@
+Testsuite: test.ScenarioTest
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 19,037 sec
+------------- Standard Output ---------------
+00_login_test.txt
+Chatserver ueber Factory gestartet
+chatserver.Chatserver up and waiting for commands!
+client.Client up and waiting for commands!
+client.Client up and waiting for commands!
+client.Client up and waiting for commands!
+15:25:11.501		bill.de> !login bill.de 23456
+15:25:11.505		bill.de: Successfully logged in.
+15:25:12.002		alice.vienna.at> !login alice.vienna.at 12345
+15:25:12.002		alice.vienna.at: Successfully logged in.
+15:25:12.502		honesch.com> !login honesch.com xlt3j
+15:25:12.503		honesch.com: Successfully logged in.
+15:25:13.002		honesch.com> !register 10.0.0.8:13107
+15:25:13.003		honesch.com: Registration was successful.
+15:25:13.503		bill.de> !register 10.0.0.8:13108
+15:25:13.503		bill.de: Registration was successful.
+15:25:14.003		bill.de> !msg honesch.com asdasd
+(honesch.com): asdasd
+!ack
+15:25:14.004		bill.de: Private Message to honesch.com sent.
+15:25:14.503		bill.de> !msg alice.vienna.at asdasdasdaasd
+15:25:14.503		bill.de: Wrong username or user not reachable.
+15:25:15.004		alice.vienna.at> !msg bill.de Hello Billchen :) Bussi
+(bill.de): Hello Billchen :) Bussi
+!ack
+15:25:15.005		alice.vienna.at: Private Message to bill.de sent.
+15:25:15.504		chatserver> !exit
+socket closed
+15:25:15.504		chatserver: chatserver closed
+15:25:16.004		alice.vienna.at> !exit
+15:25:16.004		alice.vienna.at: alice.vienna.at closed
+################################################################################
+01_login_test.txt
+Chatserver ueber Factory gestartet
+chatserver.Chatserver up and waiting for commands!
+client.Client up and waiting for commands!
+client.Client up and waiting for commands!
+################################################################################
+------------- ---------------- ---------------
+
+Testcase: 00_login_test took 13,025 sec
+Testcase: 01_login_test took 6,002 sec
