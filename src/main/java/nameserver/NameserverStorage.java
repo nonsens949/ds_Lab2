@@ -6,9 +6,9 @@ import java.util.HashMap;
 public class NameserverStorage {
 	
 	private HashMap<String, INameserver> nameserverStorage = new HashMap<String,INameserver>();
+	private HashMap<String, INameserverForChatserver> nameserverForChatserverStorage = new HashMap<String, INameserverForChatserver>();
 	
-	
-	public synchronized boolean addNameserver(String zone, INameserver iNameserver){
+	public synchronized boolean addNameserver(String zone, INameserver iNameserver,INameserverForChatserver nameserverForChatserver ){
 		zone = zone.toLowerCase();
 		
 		//if nameserver already exists --> do not add again
@@ -16,6 +16,7 @@ public class NameserverStorage {
 			return false;
 		}else{
 			nameserverStorage.put(zone, iNameserver);
+			nameserverForChatserverStorage.put(zone, nameserverForChatserver);
 			return true;
 		}
 	}
@@ -33,5 +34,9 @@ public class NameserverStorage {
 		zone = zone.toLowerCase();
 		return nameserverStorage.containsKey(zone);
 	}
+	
+	public INameserverForChatserver getNameserverForChatserver(String zone) {
+        return nameserverForChatserverStorage.get(zone.toLowerCase());
+    }
 
 }

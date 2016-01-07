@@ -13,6 +13,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
 
+import objects.PrivateAdress;
 import cli.Shell;
 import util.Config;
 import cli.Command;
@@ -160,10 +161,24 @@ public class Client implements IClientCli, Runnable {
 		String[] temp = privateAddress.split(":");
 		String ip = temp[0];
 		int port = Integer.parseInt(temp[1]);
+
 		privateServerSocket = new ServerSocket(port);
+		
+		//Lab2 registration
+		PrivateAdress pA = new PrivateAdress();
+		pA.setName(ip);
+		pA.setPort(port);
+		
 		new Thread(new PrivateMessageListener(privateServerSocket,data)).start();
 		
+		
+		
+		
+		
 		return "Registration was successful.";
+		
+		
+		
 	}
 	@Command
 	@Override

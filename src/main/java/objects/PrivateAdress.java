@@ -9,6 +9,11 @@ public class PrivateAdress {
 		this.name = "";
 		this.port = 0;
 	}
+	
+	public PrivateAdress(String adress){
+		name = adress.substring(0, adress.indexOf(":"));
+		port = Integer.valueOf(adress.substring(adress.indexOf(":")));
+	}
 
 	@Override
 	public String toString() {

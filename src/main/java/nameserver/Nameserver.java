@@ -12,9 +12,12 @@ import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 
+import objects.PrivateAdress;
+import objects.PrivateAdressStorage;
 import nameserver.exceptions.AlreadyRegisteredException;
 import nameserver.exceptions.InvalidDomainException;
 import cli.Command;
@@ -37,6 +40,7 @@ public class Nameserver implements INameserverCli, Runnable {
 	private Registry registry;
 	private NameserverStorage nameserverStorage;
 	private NameserverRMI nameserverRMI;
+	private PrivateAdressStorage privateAdressStorage;
 	
 	private Shell shell;
 	
@@ -59,7 +63,9 @@ public class Nameserver implements INameserverCli, Runnable {
 		this.userResponseStream = userResponseStream;
 		
 		this.nameserverStorage = new NameserverStorage();
-		this.nameserverRMI = new NameserverRMI(nameserverStorage);
+		this.privateAdressStorage = new PrivateAdressStorage();
+		this.nameserverRMI = new NameserverRMI(nameserverStorage,privateAdressStorage);
+		
 	}
 	
 	
@@ -143,7 +149,16 @@ public class Nameserver implements INameserverCli, Runnable {
 	@Override
 	public String addresses() throws IOException {
 		// TODO Auto-generated method stub
-		return null;
+		HashMap<String,PrivateAdress> zones = new HashMap<String,PrivateAdress>(privateAdressStorage.getAll());
+		LinkedList<String> userList = privateAdressStorage.getUsers();
+		Collections.sort(userList);
+		
+		String sortedUsers = "";
+		for(String user:userList){
+			sortedUsers = sortedUsers + "# " + user + " " + privateAdressStorage.getPrivateAdress(user) + "\n";
+		}
+		
+		return sortedUsers;
 	}
 
 	@Command

@@ -1,7 +1,7 @@
-package nameserver;
+package objects;
 
-import objects.PrivateAdress;
 import java.util.HashMap;
+import java.util.LinkedList;
 
 public class PrivateAdressStorage {
 	
@@ -29,6 +29,10 @@ public class PrivateAdressStorage {
 	
 	public HashMap<String, PrivateAdress> getAll(){
 		return new HashMap<>(privateAdressStorage);
+	}
+	
+	public LinkedList<String> getUsers(){
+		return new LinkedList<String>(privateAdressStorage.keySet());
 	}
 	
 	
