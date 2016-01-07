@@ -17,6 +17,7 @@ import java.rmi.RemoteException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.Key;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Arrays;
@@ -35,6 +36,8 @@ import nameserver.exceptions.AlreadyRegisteredException;
 import nameserver.exceptions.InvalidDomainException;
 
 import org.bouncycastle.util.encoders.Base64;
+
+import javax.crypto.Mac;
 
 import objects.Domain;
 import objects.PrivateAdress;
@@ -163,7 +166,6 @@ public class Client implements IClientCli, Runnable {
 	@Command
 	@Override
 	public String msg(String username, String message) throws IOException {
-		
 		String address = lookup(username);
 		if(address.contains("Wrong username"))
 			return address;
@@ -176,9 +178,62 @@ public class Client implements IClientCli, Runnable {
 		BufferedReader privatereader = new BufferedReader(new InputStreamReader(privatesocket.getInputStream()));
 		PrintWriter privatewriter = new PrintWriter(privatesocket.getOutputStream(), true);
 		
-		privatewriter.println("("+username+"): "+message);
-		System.out.println(privatereader.readLine());
-		return "Private Message to "+username+" sent.";
+		String endmsg = "";
+		
+		String stringmessage = "("+username+"): "+message;
+		byte[] rawmessage = stringmessage.getBytes();
+		
+		Key secretKey = Keys.readSecretKey(new File("keys/hmac.key"));
+		Mac hMac = null;
+		try {
+			hMac = Mac.getInstance("HmacSHA256");
+		} catch (NoSuchAlgorithmException e1) {
+			e1.printStackTrace();
+		}
+		try {
+			hMac.init(secretKey);
+		} catch (InvalidKeyException e) {
+			e.printStackTrace();
+		}
+		byte[] hash = hMac.doFinal(rawmessage);
+		
+		byte[] base64Message = Base64.encode(hash);
+		privatewriter.println(new String(base64Message) + "!msg "+ stringmessage );
+		
+		String returnstring = privatereader.readLine();
+		
+		if(returnstring == "!ack")
+			endmsg = "!ack";
+		else{
+			Mac hMac2 = null;
+			try {
+				hMac2 = Mac.getInstance("HmacSHA256");
+			} catch (NoSuchAlgorithmException e1) {
+				e1.printStackTrace();
+			}
+			try {
+				hMac2.init(secretKey);
+			} catch (InvalidKeyException e) {
+				e.printStackTrace();
+			}
+			
+			String[] parts = returnstring.split("!tampered ");
+			
+			byte[] computedHash = hMac2.doFinal(parts[2].getBytes());
+			
+			boolean validHash = MessageDigest.isEqual(computedHash, hash);
+			
+			if(!validHash){
+				System.out.println("Msg wurde am Hin- u. Rueckweg manupuliert");
+				endmsg = "!tampered";
+			}
+			else{
+				System.out.println("Msg wurde am Hinweg manupuliert");
+				endmsg = "!tampered";
+			}
+		}
+		
+		return endmsg;
 	}
 	@Command
 	@Override
