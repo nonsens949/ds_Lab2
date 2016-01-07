@@ -166,6 +166,7 @@ public class Client implements IClientCli, Runnable {
 	@Command
 	@Override
 	public String msg(String username, String message) throws IOException {
+		
 		String address = lookup(username);
 		if(address.contains("Wrong username"))
 			return address;
@@ -224,17 +225,18 @@ public class Client implements IClientCli, Runnable {
 			boolean validHash = MessageDigest.isEqual(computedHash, hash);
 			
 			if(!validHash){
-				System.out.println("Msg wurde am Hin- u. Rueckweg manupuliert");
+				System.out.println("Gesendete Message wurde am Hin- u. Rueckweg manupuliert");
 				endmsg = "!tampered";
 			}
 			else{
-				System.out.println("Msg wurde am Hinweg manupuliert");
+				System.out.println("Gesendete Message wurde am Hinweg manupuliert");
 				endmsg = "!tampered";
 			}
 		}
 		
 		return endmsg;
 	}
+	
 	@Command
 	@Override
 	public String lookup(String username) throws IOException {

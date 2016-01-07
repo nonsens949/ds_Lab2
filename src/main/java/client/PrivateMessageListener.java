@@ -71,6 +71,7 @@ public class PrivateMessageListener implements Runnable {
 				if(validHash){
 					writer.println("!ack");
 				}else{
+					System.out.println("Empfangene Message wurde manipuliert.");
 					writer.println(new String(computedHash)+"!tampered "+parts[2]);
 				}
 				
